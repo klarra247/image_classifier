@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Classifier API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .result { margin-top: 20px; padding: 10px; border: 1px solid #ddd; }
+        #loading { display: none; margin: 10px 0; }
+        .prediction-bar {
+            height: 30px;
+            margin: 5px 0;
+            position: relative;
+            background-color: #f0f0f0;
+            border-radius: 3px;
+        }
+        .prediction-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 3px;
+        }
+        .prediction-label {
+            position: absolute;
+            left: 10px;
+            top: 6px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+        }
+        .prediction-percentage {
+            position: absolute;
+            right: 10px;
+            top: 6px;
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+        }
+        #preview {
+            max-width: 300px;
+            max-height: 300px;
+            margin-top: 10px;
+            display: none;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1>Image Classifier API Test</h1>
+    
+    <form id="upload-form">
+        <input type="file" id="image-input" name="image" accept="image/*" onchange="previewImage(this)">
+        <button type="button" id="upload-button" onclick="uploadImage()">Classify Image</button>
+        <div id="loading">Processing image...</div>
+        <img id="preview" src="#" alt="Preview">
+    </form>
+    
+    <div id="result" class="result" style="display: none;">
+        <h2>Classification Result</h2>
+        <div id="result-json"></div>
+        <div id="prediction-bars"></div>
+    </div>
+    
+    <script>
+        // Preview image before upload
+        function previewImage(input) {
+            const preview = document.getElementById('preview');
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        function uploadImage() {
+            const fileInput = document.getElementById('image-input');
+            const loading = document.getElementById('loading');
+            const result = document.getElementById('result');
+            const resultJson = document.getElementById('result-json');
+            const predictionBars = document.getElementById('prediction-bars');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('image', fileInput.files[0]);
+            
+            loading.style.display = 'block';
+            result.style.display = 'none';
+            
+            fetch('http://localhost:8000/api/classify/', {
+                method: 'POST',
+                body: formData,
+                // Don't set Content-Type header - let the browser set it with the boundary
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                
+                // Display the result
+                if (data.error) {
+                    resultJson.innerHTML = `<p style="color: red;">Error: ${data.error}</p>`;
+                    return;
+                }
+                
+                // Display prediction result
+                resultJson.innerHTML = `
+                    <p><strong>Top prediction:</strong> ${data.predicted_class} (${(data.confidence * 100).toFixed(2)}%)</p>
+                `;
+                
+                // Display prediction bars
+                predictionBars.innerHTML = '<h3>Top 3 Predictions:</h3>';
+                data.top3.forEach(pred => {
+                    const percentage = (pred.confidence * 100).toFixed(2);
+                    predictionBars.innerHTML += `
+                        <div class="prediction-bar">
+                            <div class="prediction-fill" style="width: ${percentage}%"></div>
+                            <span class="prediction-label">${pred.class}</span>
+                            <span class="prediction-percentage">${percentage}%</span>
+                        </div>
+                    `;
+                });
+            })
+            .catch(error => {
+                loading.style.display = 'none';
+                result.style.display = 'block';
+                resultJson.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
